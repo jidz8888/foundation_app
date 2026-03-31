@@ -203,7 +203,15 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == request.email).first()
     if not user or user.password != request.password:
         raise HTTPException(status_code=401, detail="Invalid credentials")
+    
+    profile_id = user.id
+    if user.role == "student":
+        student = db.query(Student).filter(Student.email == user.email).first()
+        if student:
+            profile_id = student.id
+            
     return {
+        "id": str(profile_id),
         "name": user.name,
         "role": user.role,
         "token": f"mock_token_{user.role}"
@@ -223,7 +231,28 @@ def register(request: RegisterRequest, db: Session = Depends(get_db)):
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
+    
+    profile_id = new_user.id
+    if new_user.role == "student":
+        student = db.query(Student).filter(Student.email == new_user.email).first()
+        if not student:
+            # Create a basic student record for new student accounts
+            student = Student(
+                name=new_user.name,
+                email=new_user.email,
+                grade="To be assigned",
+                age=0,
+                guardian_name="N/A",
+                contact_number="N/A",
+                status="active"
+            )
+            db.add(student)
+            db.commit()
+            db.refresh(student)
+        profile_id = student.id
+        
     return {
+        "id": str(profile_id),
         "name": new_user.name,
         "email": new_user.email,
         "role": new_user.role,
