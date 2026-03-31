@@ -252,7 +252,7 @@ def get_dashboard(db: Session = Depends(get_db), token: str = Depends(verify_tok
         "totalStudents": {"title": "Total Students", "value": f"{total_students:,}", "change": 0.0, "icon": "people"},
         "attendanceRate": {"title": "Attendance Rate", "value": f"{rate:.1f}%", "change": 0.0, "icon": "check_circle"},
         "stockItems": {"title": "Stock Items", "value": str(stock_count), "change": 0.0, "icon": "inventory"},
-        "totalDonations": {"title": "Total Donations", "value": f"${total_donations:,.0f}", "change": 0.0, "icon": "volunteer"},
+        "totalDonations": {"title": "Total Donations", "value": f"₹{total_donations:,.0f}", "change": 0.0, "icon": "volunteer"},
         "recentActivities": [
             {
                 "title": a.title,
@@ -568,7 +568,7 @@ def add_donation(request: DonationRequest, db: Session = Depends(get_db), token:
     db.commit()
     db.refresh(new_donation)
     
-    log_activity(db, "New Donation Received", f"${new_donation.amount:,.0f} from {new_donation.donor_name}", "volunteer_activism")
+    log_activity(db, "New Donation Received", f"₹{new_donation.amount:,.0f} from {new_donation.donor_name}", "volunteer_activism")
     
     return {"success": True, "donation": request.model_dump()}
 
