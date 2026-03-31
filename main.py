@@ -30,6 +30,7 @@ class User(Base):
 class Student(Base):
     __tablename__ = "students"
     id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, index=True, nullable=True) # Linked User account
     name = Column(String, index=True)
     grade = Column(String, index=True)
     age = Column(Integer)
@@ -39,6 +40,16 @@ class Student(Base):
     address = Column(String, nullable=True)
     status = Column(String, default="active")
     enrollment_date = Column(String, nullable=True)
+
+class Teacher(Base):
+    __tablename__ = "teachers"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, index=True, nullable=True) # Linked User account
+    name = Column(String, index=True)
+    grade = Column(String, index=True) # Managing Grade
+    contact_number = Column(String)
+    email = Column(String, unique=True, index=True)
+    status = Column(String, default="active")
 
 class Announcement(Base):
     __tablename__ = "announcements"
@@ -204,14 +215,30 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
     if not user or user.password != request.password:
         raise HTTPException(status_code=401, detail="Invalid credentials")
     
-    profile_id = user.id
+    profile_id = user.id # Default to user ID (e.g. for Admin)
+    
+    # Check for Student Profile
     if user.role == "student":
-        student = db.query(Student).filter(Student.email == user.email).first()
+        student = db.query(Student).filter((Student.user_id == user.id) | (Student.email == user.email)).first()
         if student:
+            # Auto-heal the link if missing
+            if student.user_id != user.id:
+                student.user_id = user.id
+                db.commit()
             profile_id = student.id
             
+    # Check for Teacher Profile
+    elif user.role == "teacher":
+        teacher = db.query(Teacher).filter((Teacher.user_id == user.id) | (Teacher.email == user.email)).first()
+        if teacher:
+            # Auto-heal the link if missing
+            if teacher.user_id != user.id:
+                teacher.user_id = user.id
+                db.commit()
+            profile_id = teacher.id
+            
     return {
-        "id": str(profile_id),
+        "id": profile_id,
         "name": user.name,
         "role": user.role,
         "token": f"mock_token_{user.role}"
@@ -222,6 +249,7 @@ def register(request: RegisterRequest, db: Session = Depends(get_db)):
     existing_user = db.query(User).filter(User.email == request.email).first()
     if existing_user:
         raise HTTPException(status_code=400, detail="Email already registered")
+        
     new_user = User(
         name=request.name,
         email=request.email,
@@ -233,13 +261,15 @@ def register(request: RegisterRequest, db: Session = Depends(get_db)):
     db.refresh(new_user)
     
     profile_id = new_user.id
+    
+    # Handle Student Registration
     if new_user.role == "student":
         student = db.query(Student).filter(Student.email == new_user.email).first()
         if not student:
-            # Create a basic student record for new student accounts
             student = Student(
                 name=new_user.name,
                 email=new_user.email,
+                user_id=new_user.id,
                 grade="To be assigned",
                 age=0,
                 guardian_name="N/A",
@@ -247,12 +277,33 @@ def register(request: RegisterRequest, db: Session = Depends(get_db)):
                 status="active"
             )
             db.add(student)
-            db.commit()
-            db.refresh(student)
+        else:
+            student.user_id = new_user.id
+        db.commit()
+        db.refresh(student)
         profile_id = student.id
         
+    # Handle Teacher Registration
+    elif new_user.role == "teacher":
+        teacher = db.query(Teacher).filter(Teacher.email == new_user.email).first()
+        if not teacher:
+            teacher = Teacher(
+                name=new_user.name,
+                email=new_user.email,
+                user_id=new_user.id,
+                grade="To be assigned",
+                contact_number="N/A",
+                status="active"
+            )
+            db.add(teacher)
+        else:
+            teacher.user_id = new_user.id
+        db.commit()
+        db.refresh(teacher)
+        profile_id = teacher.id
+        
     return {
-        "id": str(profile_id),
+        "id": profile_id,
         "name": new_user.name,
         "email": new_user.email,
         "role": new_user.role,
